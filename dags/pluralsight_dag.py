@@ -33,34 +33,34 @@ def transform_data(*args, **kwargs):
     invoices_data = pd.read_csv(filepath_or_buffer=data_path,
                                 sep=',',
                                 header=0,
-                                usecols=['StockCode', 'Quantity',
-                                         'InvoiceDate', 'UnitPrice',
-                                         'CustomerID', 'Country'],
-                                parse_dates=['InvoiceDate']
+                                usecols=['StockCode', 'Quantity', 'InvoiceDate', 'UnitPrice', 'CustomerID', 'Country'],
+                                parse_dates=['InvoiceDate'],
+                                index_col=0
                                 )
     invoices_data.to_csv(path_or_buf=transformed_path)
 
 
 def store_in_db(*args, **kwargs):
-    transformed_invoices = pd.read_csv(transformed_path,
-                                       encoding='unicode_escape')
+    transformed_invoices = pd.read_csv(transformed_path)
     transformed_invoices.columns = [c.lower() for c in
                                     transformed_invoices.columns]  # postgres doesn't like capitals or spaces
 
+    transformed_invoices.dropna(axis=0, how='any', inplace=True)
     engine = create_engine(
         'postgresql://airflow:airflow@postgres/pluralsight')
 
     transformed_invoices.to_sql("invoices",
                                 engine,
                                 if_exists='append',
-                                chunksize=500
+                                chunksize=500,
+                                index=False
                                 )
 
 
 with DAG(dag_id="pluralsight_dag",
          schedule_interval="@daily",
          default_args=default_args,
-         template_searchpath=[f"{os.environ['AIRFLOW_HOME']}/sql"],
+         template_searchpath=[f"{os.environ['AIRFLOW_HOME']}"],
          catchup=False) as dag:
     # This file could come in S3 from our ecommerce application
     is_new_data_available = FileSensor(
@@ -79,8 +79,7 @@ with DAG(dag_id="pluralsight_dag",
     create_table = PostgresOperator(
         task_id="create_table",
         sql='''CREATE TABLE IF NOT EXISTS invoices (
-                index SERIAL PRIMARY KEY,
-                stockcode integer NOT NULL,
+                stockcode VARCHAR(50) NOT NULL,
                 quantity integer NOT NULL,
                 invoicedate DATE NOT NULL,
                 unitprice decimal NOT NULL,
