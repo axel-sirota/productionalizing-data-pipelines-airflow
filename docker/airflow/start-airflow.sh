@@ -1,18 +1,14 @@
 #!/usr/bin/env bash
 
-# Create the user airflow in the HDFS
-hdfs dfs -mkdir -p   /user/airflow/
-hdfs dfs -chmod g+w  /user/airflow
-
-export SPARK_DIST_CLASSPATH=$(hadoop classpath)
 # Move to the AIRFLOW HOME directory
 cd $AIRFLOW_HOME
 
 # Initiliase the metadatabase
-airflow resetdb -y
+airflow initdb
 # shellcheck disable=SC2016
 airflow connections --add --conn_id 'data_path' --conn_type File --conn_extra '{ "path" : "data" }'
-airflow connections --add --conn_id 'spark_conn' --conn_type spark --conn_host "spark://spark-master" --conn_port "7077"
+airflow connections --add --conn_id 'postgres' --conn_type Postgres --conn_host 'postgres' --conn_login 'airflow' --conn_password 'airflow' --conn_schema 'pluralsight'
+airflow connections --add --conn_id 'slack_conn' --conn_type HTTP --conn_host 'https://hooks.slack.com/services' --conn_password "/TGY1U9PP0/B01E91SPC9E/mkIvO6L8vAnTJEHg0aUHanCT"
 exec airflow webserver  &> /dev/null &
 
 exec airflow scheduler

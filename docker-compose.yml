@@ -5,7 +5,8 @@ services:
 # DATABASE SERVICE
 ######################################################
   postgres:
-    image: postgres:12
+    build: ./docker/postgres
+    image: pluralsight/postgres
     restart: always
     container_name: postgres
     ports:
@@ -14,82 +15,11 @@ services:
       - POSTGRES_USER=airflow
       - POSTGRES_PASSWORD=airflow
       - POSTGRES_DB=airflow
-      #- PGDATA=/var/lib/postgresql/data/pgdata
     healthcheck:
       test: [ "CMD", "pg_isready", "-q", "-d", "airflow", "-U", "airflow" ]
       timeout: 45s
       interval: 10s
       retries: 10
-
-######################################################
-# HADOOP SERVICES
-######################################################
-  namenode:
-    image: bde2020/hadoop-namenode:2.0.0-hadoop3.1.1-java8
-    container_name: namenode
-    environment:
-      - CLUSTER_NAME=test
-    env_file:
-      - ./hadoop.env
-    ports:
-      - 50070:50070
-  datanode:
-    image: bde2020/hadoop-datanode:2.0.0-hadoop3.1.1-java8
-    container_name: datanode
-    depends_on:
-      - namenode
-    env_file:
-      - ./hadoop.env
-    ports:
-      - 50075:50075
-  spark-master:
-    image: gettyimages/spark:2.4.1-hadoop-3.0
-    command: bin/spark-class org.apache.spark.deploy.master.Master -h spark-master
-    hostname: master
-    container_name: spark-master
-    environment:
-      MASTER: spark://master:7077
-      SPARK_CONF_DIR: /conf
-      SPARK_PUBLIC_DNS: localhost
-    volumes:
-      - ./docker/airflow/data:/usr/spark-2.4.1/data
-    expose:
-      - 7001
-      - 7002
-      - 7003
-      - 7004
-      - 7005
-      - 7077
-      - 6066
-    ports:
-      - 4040:4040
-      - 6066:6066
-      - 7077:7077
-      - 31000:8080
-  spark-worker:
-    image: gettyimages/spark:2.4.1-hadoop-3.0
-    container_name: spark-worker
-    command: bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
-    hostname: spark-worker
-    environment:
-      SPARK_CONF_DIR: /conf
-      SPARK_WORKER_CORES: 2
-      SPARK_WORKER_MEMORY: 1g
-      SPARK_WORKER_PORT: 8881
-      SPARK_WORKER_WEBUI_PORT: 8081
-      SPARK_PUBLIC_DNS: localhost
-    volumes:
-      - ./docker/airflow/data:/usr/spark-2.4.1/data
-    links:
-      - spark-master
-    expose:
-      - 7012
-      - 7013
-      - 7014
-      - 7015
-      - 8881
-    ports:
-      - 8081:8081
 
 ######################################################
 # AIRFLOW
@@ -104,12 +34,10 @@ services:
       - AIRFLOW__CORE__FERNET_KEY="${FERNET_KEY}"
     volumes:
       - ./dags:/usr/local/airflow/dags
-      - ./spark-scripts:/usr/local/airflow/spark-scripts
     ports:
       - 8080:8080
     depends_on:
       - postgres
-      - spark-master
     healthcheck:
       test: [ "CMD", "nc", "-z", "airflow", "8080" ]
       timeout: 45s
