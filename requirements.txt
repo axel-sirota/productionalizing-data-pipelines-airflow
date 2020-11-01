@@ -1,4 +1,0 @@
-numpy
-sasl
-pandas~=1.1.3
-SQLAlchemy~=1.3.20

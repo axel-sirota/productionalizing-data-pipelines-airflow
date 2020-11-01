@@ -1,0 +1,55 @@
+version: '2.1'
+services:
+
+######################################################
+# DATABASE SERVICE
+######################################################
+  postgres:
+    build: ./docker/postgres
+    image: pluralsight/postgres
+    restart: always
+    container_name: postgres
+    ports:
+      - "32769:5432"
+    environment:
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-q", "-d", "airflow", "-U", "airflow" ]
+      timeout: 45s
+      interval: 10s
+      retries: 10
+
+######################################################
+# AIRFLOW
+######################################################
+
+  airflow:
+    build: ./docker/airflow
+    image: pluralsight/airflow
+    restart: always
+    container_name: airflow
+    environment:
+      - AIRFLOW__CORE__FERNET_KEY="${FERNET_KEY}"
+    volumes:
+      - ./dags:/usr/local/airflow/dags
+    ports:
+      - 8080:8080
+    depends_on:
+      - postgres
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "airflow", "8080" ]
+      timeout: 45s
+      interval: 10s
+      retries: 10
+
+######################################################
+# NETWORK
+######################################################
+
+# Change name of default network otherwise URI invalid for HIVE
+# because of the _ contained by default network
+networks:
+  default:
+    name: airflow-network
