@@ -15,7 +15,7 @@ from airflow.operators.python_operator import PythonOperator
 
 default_args = {
     "owner": "airflow",
-    "start_date": datetime(2020, 10, 1),
+    "start_date": datetime(2020, 11, 1),
     "depends_on_past": False,
     "email_on_failure": False,
     "email_on_retry": False,
@@ -57,7 +57,7 @@ def store_in_db(*args, **kwargs):
                                 )
 
 
-with DAG(dag_id="pluralsight_dag",
+with DAG(dag_id="invoices_dag",
          schedule_interval="@daily",
          default_args=default_args,
          template_searchpath=[f"{os.environ['AIRFLOW_HOME']}"],
@@ -95,6 +95,14 @@ with DAG(dag_id="pluralsight_dag",
         python_callable=store_in_db
     )
 
+    create_report = PostgresOperator(
+        task_id="create_report",
+        sql=['exec_report.sql'],
+        postgres_conn_id='postgres',
+        database='pluralsight',
+        autocommit=True
+    )
+
     notify_data_science_team = SlackWebhookOperator(
         task_id='notify_data_science_team',
         http_conn_id='slack_conn',
@@ -107,14 +115,6 @@ with DAG(dag_id="pluralsight_dag",
         icon_url='https://raw.githubusercontent.com/apache/'
                  'airflow/master/airflow/www/static/pin_100.png',
         dag=dag
-    )
-
-    create_report = PostgresOperator(
-        task_id="create_report",
-        sql=['exec_report.sql'],
-        postgres_conn_id='postgres',
-        database='pluralsight',
-        autocommit=True
     )
 
     # Now could come an upload to S3 of the model or a deploy step
