@@ -1,0 +1,105 @@
+version: '2.1'
+services:
+
+  redis:
+    image: 'redis:5.0.5'
+    container_name: redis
+    command: redis-server --requirepass redispass
+
+  postgres:
+    build: docker/postgres
+    image: pluralsight/postgres
+    restart: always
+    container_name: postgres
+    ports:
+      - "32769:5432"
+    environment:
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-q", "-d", "airflow", "-U", "airflow" ]
+      timeout: 45s
+      interval: 10s
+      retries: 10
+  flower:
+    build: docker/airflow
+    image: pluralsight/airflow
+    restart: always
+    container_name: flower
+    depends_on:
+        - redis
+        - webserver
+    environment:
+        - EXECUTOR=CeleryExecutor
+        - REDIS_PASSWORD=redispass
+    ports:
+        - "5555:5555"
+    command: flower
+
+  webserver:
+    build: docker/airflow
+    image: pluralsight/airflow
+    restart: always
+    container_name: webserver
+    depends_on:
+        - postgres
+        - redis
+    environment:
+        - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+        - EXECUTOR=CeleryExecutor
+        - POSTGRES_USER=airflow
+        - POSTGRES_PASSWORD=airflow
+        - POSTGRES_DB=airflow
+        - REDIS_PASSWORD=redispass
+    volumes:
+        - ./dags:/usr/local/airflow/dags
+    ports:
+        - "8080:8080"
+    command: webserver
+    healthcheck:
+        test: ["CMD-SHELL", "[ -f /usr/local/airflow/airflow-webserver.pid ]"]
+        interval: 30s
+        timeout: 30s
+        retries: 3
+
+  scheduler:
+    build: docker/airflow
+    image: pluralsight/airflow
+    restart: always
+    container_name: scheduler
+    depends_on:
+        - webserver
+    environment:
+        - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+        - EXECUTOR=CeleryExecutor
+        - POSTGRES_USER=airflow
+        - POSTGRES_PASSWORD=airflow
+        - POSTGRES_DB=airflow
+        - REDIS_PASSWORD=redispass
+    volumes:
+        - ./dags:/usr/local/airflow/dags
+    command: scheduler
+
+  worker:
+    build: docker/airflow
+    image: pluralsight/airflow
+    restart: always
+    depends_on:
+        - webserver
+        - scheduler
+        - flower
+    environment:
+        - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+        - EXECUTOR=CeleryExecutor
+        - POSTGRES_USER=airflow
+        - POSTGRES_PASSWORD=airflow
+        - POSTGRES_DB=airflow
+        - REDIS_PASSWORD=redispass
+    volumes:
+        - ./dags:/usr/local/airflow/dags
+    command: worker
+
+networks:
+  default:
+    name: airflow-network

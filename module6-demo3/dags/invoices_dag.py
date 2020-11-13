@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 from airflow.contrib.operators.slack_webhook_operator import \
     SlackWebhookOperator
+from airflow.operators.dummy_operator import DummyOperator
 from sqlalchemy import create_engine
 
 import pandas as pd
@@ -11,7 +12,8 @@ from airflow import DAG
 from airflow.contrib.sensors.file_sensor import FileSensor
 from airflow.hooks.base_hook import BaseHook
 from airflow.operators.postgres_operator import PostgresOperator
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python_operator import PythonOperator, \
+    BranchPythonOperator
 
 default_args = {
     "owner": "airflow",
@@ -33,7 +35,8 @@ def transform_data(*args, **kwargs):
     invoices_data = pd.read_csv(filepath_or_buffer=data_path,
                                 sep=',',
                                 header=0,
-                                usecols=['StockCode', 'Quantity', 'InvoiceDate', 'UnitPrice', 'CustomerID', 'Country'],
+                                usecols=['StockCode', 'Quantity', 'InvoiceDate',
+                                         'UnitPrice', 'CustomerID', 'Country'],
                                 parse_dates=['InvoiceDate'],
                                 index_col=0
                                 )
@@ -57,11 +60,17 @@ def store_in_db(*args, **kwargs):
                                 )
 
 
+def is_monday(*args, **context):
+    execution_date = context['execution_date']
+    weekday = execution_date.in_timezone("Europe/London").weekday()
+    return 'create_report' if weekday == 0 else 'none'
+
+
 with DAG(dag_id="invoices_dag",
          schedule_interval="@daily",
          default_args=default_args,
          template_searchpath=[f"{os.environ['AIRFLOW_HOME']}"],
-         catchup=False) as dag:
+         catchup=True) as dag:
     # This file could come in S3 from our ecommerce application
     is_new_data_available = FileSensor(
         task_id="is_new_data_available",
@@ -69,6 +78,20 @@ with DAG(dag_id="invoices_dag",
         filepath="data.csv",
         poke_interval=5,
         timeout=20
+    )
+
+    notify_file_failed = SlackWebhookOperator(
+        task_id='notify_file_failed',
+        http_conn_id='slack_conn',
+        webhook_token=slack_token,
+        trigger_rule='all_failed',
+        message="Error Notification \n"
+                "Data was missing! \n "
+                "https://www.youtube.com/watch?v=ZDEVut4j7eU",
+        username='airflow',
+        icon_url='https://raw.githubusercontent.com/apache/'
+                 'airflow/master/airflow/www/static/pin_100.png',
+        dag=dag
     )
 
     transform_data = PythonOperator(
@@ -93,6 +116,16 @@ with DAG(dag_id="invoices_dag",
     save_into_db = PythonOperator(
         task_id='save_into_db',
         python_callable=store_in_db
+    )
+
+    is_monday_task = BranchPythonOperator(
+        task_id='is_monday',
+        python_callable=is_monday,
+        provide_context=True
+    )
+
+    none = DummyOperator(
+        task_id='none'
     )
 
     create_report = PostgresOperator(
@@ -120,6 +153,7 @@ with DAG(dag_id="invoices_dag",
     # Now could come an upload to S3 of the model or a deploy step
 
     is_new_data_available >> transform_data
+    is_new_data_available >> notify_file_failed
     transform_data >> create_table >> save_into_db
     save_into_db >> notify_data_science_team
-    save_into_db >> create_report
+    save_into_db >> is_monday_task >> [create_report, none]

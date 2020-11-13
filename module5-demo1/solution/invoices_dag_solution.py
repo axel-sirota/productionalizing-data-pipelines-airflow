@@ -29,15 +29,17 @@ transformed_path = f'{os.path.splitext(data_path)[0]}-transformed.csv'
 slack_token = BaseHook.get_connection("slack_conn").password
 
 
-def transform_data(*args, **kwargs):
+def transform_data(ds, **kwargs):
     invoices_data = pd.read_csv(filepath_or_buffer=data_path,
                                 sep=',',
                                 header=0,
-                                usecols=['StockCode', 'Quantity', 'InvoiceDate', 'UnitPrice', 'CustomerID', 'Country'],
+                                usecols=['StockCode', 'Quantity', 'InvoiceDate',
+                                         'UnitPrice', 'CustomerID', 'Country'],
                                 parse_dates=['InvoiceDate'],
                                 index_col=0
                                 )
-    invoices_data.to_csv(path_or_buf=transformed_path)
+    filtered_invoices_data = invoices_data[invoices_data['InvoiceDate'].dt.strftime("%Y-%m-%d") == f"{ds}"]
+    filtered_invoices_data.to_csv(path_or_buf=transformed_path)
 
 
 def store_in_db(*args, **kwargs):
@@ -57,7 +59,7 @@ def store_in_db(*args, **kwargs):
                                 )
 
 
-with DAG(dag_id="invoices_dag",
+with DAG(dag_id="invoices_dag_solution",
          schedule_interval="@daily",
          default_args=default_args,
          template_searchpath=[f"{os.environ['AIRFLOW_HOME']}"],
@@ -73,7 +75,8 @@ with DAG(dag_id="invoices_dag",
 
     transform_data = PythonOperator(
         task_id="transform_data",
-        python_callable=transform_data
+        python_callable=transform_data,
+        provide_context=True
     )
 
     create_table = PostgresOperator(
