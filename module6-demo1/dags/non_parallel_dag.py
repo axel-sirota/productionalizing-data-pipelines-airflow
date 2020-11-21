@@ -14,7 +14,7 @@ default_args = {
 
 
 def select_tasks(*args, **context):
-    ids = np.random.randint(10, size=3)
+    ids = np.random.choice(10, size=3, replace=False)
     return [str(i) for i in ids]
 
 
@@ -28,5 +28,5 @@ with DAG(dag_id="non_parallel_dag",
         python_callable=select_tasks
     )
     tasks = [DummyOperator(task_id=f"{i}") for i in range(10)]
-    end = DummyOperator(task_id="none")
+    end = DummyOperator(task_id="none", trigger_rule='one_success')
     start >> tasks >> end
