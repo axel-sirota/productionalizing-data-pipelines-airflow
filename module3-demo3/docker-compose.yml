@@ -31,7 +31,7 @@ services:
     restart: always
     container_name: airflow
     environment:
-      - AIRFLOW__CORE__FERNET_KEY="${FERNET_KEY}"
+      - AIRFLOW__CORE__FERNET_KEY="Z27wHAQxCObGWbIYyp06PlNoNlV7hyLO5zT74itoQww="
     volumes:
       - ./dags:/usr/local/airflow/dags
     ports:
