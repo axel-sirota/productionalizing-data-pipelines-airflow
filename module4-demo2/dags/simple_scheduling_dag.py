@@ -13,6 +13,7 @@ default_args = {
 
 with DAG(dag_id="simple_scheduling_dag",
          schedule_interval="*/15 * * * *",
+         start_date=datetime(2020, 12, 1),
          default_args=default_args,
          catchup=False) as dag:
     task_1 = DummyOperator(task_id="task_1")
