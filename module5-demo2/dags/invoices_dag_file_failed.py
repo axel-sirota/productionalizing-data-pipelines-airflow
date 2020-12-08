@@ -66,7 +66,7 @@ def is_monday(*args, **context):
     return 'create_report' if weekday == 0 else 'none'
 
 
-with DAG(dag_id="invoices_dag",
+with DAG(dag_id="invoices_dag_file_failed",
          schedule_interval="@daily",
          default_args=default_args,
          template_searchpath=[f"{os.environ['AIRFLOW_HOME']}"],
@@ -75,7 +75,7 @@ with DAG(dag_id="invoices_dag",
     is_new_data_available = FileSensor(
         task_id="is_new_data_available",
         fs_conn_id="data_path",
-        filepath="data.csv",
+        filepath="missing_file.csv",
         poke_interval=5,
         timeout=20
     )
