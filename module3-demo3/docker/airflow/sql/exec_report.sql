@@ -1,4 +1,4 @@
-CREATE TABLE report
+CREATE TABLE IF NOT EXISTS report
 AS
 SELECT invoices.stockcode,
        invoices.country,
